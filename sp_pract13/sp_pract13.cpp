@@ -13,6 +13,7 @@ struct Process
     PROCESS_INFORMATION piApp;
     DWORD priorityClass;
     DWORD exitCode;
+    double seconds;
 
     std::string state = "Работает";
     std::string priorityName = "";
@@ -26,7 +27,7 @@ public:
     Process* processArray = nullptr;
     HANDLE* processHandles = nullptr;
 
-    void Info(bool isSuspended)
+    void UpdateState(bool isSuspended)
     {
         for (int i = 0; i < size; i++)
         {
@@ -49,10 +50,33 @@ public:
                 processArray[i].state = "Завершен";
 
             }
+        }
+    }
 
-            UpdatePriorityName();
+    void Info(bool isSuspended)
+    {
+        UpdatePriorityName();
+        UpdateState(isSuspended);
+
+        for (int i = 0; i < size; i++)
+        {
+            GetExitCodeProcess(processArray[i].piApp.hProcess, &processArray[i].exitCode);
 
             std::cout << i << " | ProcessID: " << processArray[i].piApp.dwProcessId << " | " << processArray[i].state << " | " << processArray[i].priorityName << " | " << processArray[i].exitCode << std::endl;
+
+        }
+    }
+
+    void TimeInfo()
+    {
+        for (int i = 0; i < size; i++)
+        {
+
+            GetExitCodeProcess(processArray[i].piApp.hProcess, &processArray[i].exitCode);
+
+            UpdatePriorityName();
+            std::cout << i << " | ProcessID: " << processArray[i].piApp.dwProcessId << " | " << processArray[i].state << " | " << processArray[i].priorityName << " | Время в секундах: " << processArray[i].seconds << std::endl;
+
         }
     }
 
@@ -73,7 +97,6 @@ public:
 
     void AddProcess(Process& process)
     {
-        //если указатель массива пуст(nullptr), то выделяем память под новый элемент массива ProcessInfo
         if (processArray == nullptr)
         {
             processArray = new Process[1];
@@ -84,7 +107,7 @@ public:
 
 
         }
-        else // иначе создаем новый массив с увеличенным размером
+        else 
         {
             Process* newArray = new Process[size + 1];
             HANDLE* newProcessHandles = new HANDLE[size + 1];
@@ -340,7 +363,17 @@ int main()
 
         std::sort(race.processArray, race.processArray + processAmount, [](Process& a, Process& b) {return a.exitCode < b.exitCode; });
 
-        race.Info(isSuspended);
+        for (int i = 0; i < processAmount; i++)
+        {
+            if (race.processArray[i].exitCode != 259)
+            {
+                double seconds = race.processArray[i].exitCode / 1000.0;
+                race.processArray[i].seconds = seconds;
+            }
+            
+        }
+
+        race.TimeInfo();
         
 
 
