@@ -3,32 +3,25 @@
 #include <stdio.h>
 #include <windows.h>
 #include <iostream>
+#include <string>
 
 bool CheckPrimeNum(int num)
 {
-    int* array = new int[num];
-    int arrayIndex = 0;
+    
+    if (num < 2)
+    {
+        return false;
+    }
 
-    for (int i = 1; i <= num; i++)
+    for (int i = 2; i <= num/i; i++)
     {
         if (num % i == 0)
         {
-            array[arrayIndex] = i;
-            arrayIndex++;
+            return false;
         }
     }
 
-    for (int i = 0; i <= arrayIndex; i++)
-    {
-        if (arrayIndex == 1 && array[arrayIndex] == num)
-        {
-            delete[] array;
-            return true;
-        }
-    }
-
-    delete[] array;
-    return false;
+    return true;
 }
 
 int main(int argc, char* argv[])
@@ -38,6 +31,8 @@ int main(int argc, char* argv[])
     LARGE_INTEGER start, end, frequency;
     int elapsed_ms;
 
+    int count = 0;
+
     QueryPerformanceFrequency(&frequency);
 
     QueryPerformanceCounter(&start);
@@ -45,7 +40,7 @@ int main(int argc, char* argv[])
 
     if (argc < 3)
     {
-        return 0;
+        return -1;
     }
 
     int a = 0;
@@ -53,8 +48,8 @@ int main(int argc, char* argv[])
 
     try
     {
-        a = std::atoi(argv[1]);
-        b = std::atoi(argv[2]);
+        a = std::stoi(argv[1]);
+        b = std::stoi(argv[2]);
     }
     catch (const std::exception&)
     {
@@ -69,7 +64,9 @@ int main(int argc, char* argv[])
     {
         if (CheckPrimeNum(i))
         {
-            std::cout << i << std::endl;
+            count++;
+            std::cout << i << " -> " << count << std::endl;
+            
         }
     }
 

@@ -1,18 +1,21 @@
-﻿// sp_pract13.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
-//
-
-#include <iostream>
+﻿#include <iostream>
 #include <locale>
 #include <string>
 #include <exception>
 #include <Windows.h>
 #include <cwchar>
+#include <algorithm>
+#include <conio.h>
+
 
 struct Process
 {
     PROCESS_INFORMATION piApp;
     DWORD priorityClass;
     DWORD exitCode;
+
+    std::string state = "Работает";
+    std::string priorityName = "";
 };
 
 class ProcessRace
@@ -20,22 +23,117 @@ class ProcessRace
     int size = 0;
 
 public:
-    Process* processArray = new Process[1];
+    Process* processArray = nullptr;
+    HANDLE* processHandles = nullptr;
 
-    ProcessRace(int num)
+    void Info(bool isSuspended)
     {
-        size = num;
+        for (int i = 0; i < size; i++)
+        {
+
+
+            GetExitCodeProcess(processArray[i].piApp.hProcess, &processArray[i].exitCode);
+
+
+            if (isSuspended)
+            {
+                processArray[i].state = "Ожидает запуска";
+            }
+            else if (processArray[i].exitCode == STILL_ACTIVE)
+            {
+                processArray[i].state = "Работает";
+
+            }
+            else
+            {
+                processArray[i].state = "Завершен";
+
+            }
+
+            UpdatePriorityName();
+
+            std::cout << i << " | ProcessID: " << processArray[i].piApp.dwProcessId << " | " << processArray[i].state << " | " << processArray[i].priorityName << " | " << processArray[i].exitCode << std::endl;
+        }
+    }
+
+    void UpdatePriorityName()
+    {
+        if (processArray == nullptr) return;
+
+        for (int i = 0; i < size; i++)
+        {
+            if (processArray[i].priorityClass == IDLE_PRIORITY_CLASS) processArray[i].priorityName = "IDLE";
+            else if (processArray[i].priorityClass == BELOW_NORMAL_PRIORITY_CLASS) processArray[i].priorityName = "BELOW NORMAL";
+            else if (processArray[i].priorityClass == NORMAL_PRIORITY_CLASS) processArray[i].priorityName = "NORMAL";
+            else if (processArray[i].priorityClass == ABOVE_NORMAL_PRIORITY_CLASS) processArray[i].priorityName = "ABOVE NORMAL";
+            else if (processArray[i].priorityClass == HIGH_PRIORITY_CLASS) processArray[i].priorityName = "HIGH";
+        }
+        
+    }
+
+    void AddProcess(Process& process)
+    {
+        //если указатель массива пуст(nullptr), то выделяем память под новый элемент массива ProcessInfo
+        if (processArray == nullptr)
+        {
+            processArray = new Process[1];
+            processArray[0] = process;
+
+            processHandles = new HANDLE[1];
+            processHandles[0] = process.piApp.hProcess;
+
+
+        }
+        else // иначе создаем новый массив с увеличенным размером
+        {
+            Process* newArray = new Process[size + 1];
+            HANDLE* newProcessHandles = new HANDLE[size + 1];
+
+            for (int i = 0; i < size; i++)
+            {
+                newArray[i] = processArray[i];
+                newProcessHandles[i] = processHandles[i];
+            }
+
+            newArray[size] = process;
+            newProcessHandles[size] = process.piApp.hProcess;
+
+            delete[] processArray;
+            processArray = newArray;
+
+            delete[] processHandles;
+            processHandles = newProcessHandles;
+
+        }
+        size++;
+    }
+
+    ProcessRace()
+    {
+
+    }
+
+    ~ProcessRace()
+    {
+        for (int i = 0; i < size; i++)
+        {
+            CloseHandle(processHandles[i]);
+            CloseHandle(processArray[i].piApp.hThread);
+        }
 
         delete[] processArray;
-        processArray = new Process[size];
+        delete[] processHandles;
     }
 
     void ChangePriority(int index)
     {
-        bool skip = false;
-        while (skip = false)
+
+        if (index < 0 || index >= size)
         {
-            std::cout << "1 - IDLE_PRIORITY_CLASS\n2 - BELOW_NORMAL_PRIORITY_CLASS\n3 - NORMAL_PRIORITY_CLASS\n4 - ABOVE_NORMAL_PRIORITY_CLASS\n5 - HIGH_PRIORITY_CLASS\n6 - REALTIME_PRIORITY_CLASS" << std::endl;
+            return;
+        }
+        
+            std::cout << "1 - IDLE_PRIORITY_CLASS\n2 - BELOW_NORMAL_PRIORITY_CLASS\n3 - NORMAL_PRIORITY_CLASS\n4 - ABOVE_NORMAL_PRIORITY_CLASS\n5 - HIGH_PRIORITY_CLASS\n" << std::endl;
             std::string str;
             std::cin >> str;
 
@@ -47,6 +145,7 @@ public:
             catch (const std::exception&)
             {
                 throw std::invalid_argument("Введен некорректный тип данных");
+                return;
             }
 
 
@@ -72,18 +171,15 @@ public:
                 SetPriorityClass(processArray[index].piApp.hProcess, HIGH_PRIORITY_CLASS);
                 processArray[index].priorityClass = HIGH_PRIORITY_CLASS;
                 break;
-            case 6:
-                SetPriorityClass(processArray[index].piApp.hProcess, REALTIME_PRIORITY_CLASS);
-                processArray[index].priorityClass = REALTIME_PRIORITY_CLASS;
-                break;
+
 
             default:
-                skip = true;
+                
                 break;
             }
-            
-        }
+
         
+
     }
 
     void Race()
@@ -94,16 +190,163 @@ public:
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    try
+    {
+
+   
+        setlocale(LC_ALL, "Russian");
+        std::wcout.imbue(std::locale(""));
+
+        std::wstring executableName = L"Process.exe";
+    
+
+        Process process;
+        ProcessRace race;
+
+        std::cout << "Введите кол-во процессов от 2 до 5\n" << std::endl;
+
+        std::string str;
+        std::cin >> str;
+
+        int processAmount;
+        try
+        {
+            processAmount = std::stoi(str);
+            if (processAmount < 2)
+            {
+                processAmount = 2;
+            }
+            else if (processAmount > 5)
+            {
+                processAmount = 5;
+            }
+        }
+        catch (const std::exception&)
+        {
+            throw std::invalid_argument("Введен некорректный тип данных");
+        }
+
+        std::string params = "";
+
+        std::cout << "Введите параметры через пробел \n(Пример: 0 405000)" << std::endl;
+        std::cin.ignore();
+        std::getline(std::cin, params);
+
+
+
+
+
+
+
+        if (params.empty() == false)
+        {
+            std::wstring sParams(params.begin(), params.end());
+            executableName += L" " + sParams;
+        }
+
+        std::wstring lpCL = executableName;
+
+        for (int i = 0; i < processAmount; i++)
+        {
+
+
+
+            STARTUPINFO startUpInfo;
+            PROCESS_INFORMATION piApp;
+            ZeroMemory(&startUpInfo, sizeof(STARTUPINFO));
+            startUpInfo.cb = sizeof(STARTUPINFO);
+
+            
+
+
+            if (CreateProcess(NULL, &lpCL[0], NULL, NULL, FALSE, CREATE_SUSPENDED | CREATE_NEW_CONSOLE, NULL, NULL, &startUpInfo, &piApp) == false)
+            {
+                throw std::runtime_error("Ошибка запуска процесса: " + std::to_string(GetLastError()));
+            }
+
+            SetProcessAffinityMask(piApp.hProcess, 1);
+
+            
+            process = { piApp, GetPriorityClass(piApp.hProcess)};
+            race.AddProcess(process);
+
+            
+        }
+
+
+        bool isSuspended = true;
+        int index = 0;
+        bool skip = false;
+        while (skip == false)
+        {
+            Sleep(200);
+            system("cls");
+
+
+            if (race.processArray == nullptr)
+            {
+                std::cout << "\n\nПустой список" << std::endl;
+            }
+            else
+            {
+                race.Info(isSuspended);
+
+            }
+
+
+            std::cout << "\nВведите индекс процесса" << std::endl;
+            if (isSuspended)
+            {
+                std::cout << "\nВведите 'r', чтобы запустить процессы" << std::endl;
+            }
+
+            int charCode;
+
+            if (_kbhit())
+            {
+                charCode = _getch();
+
+                if (charCode == 27 /*27 = ESC*/)
+                {
+                    skip = true;
+                }
+                else if (charCode >= '0' && charCode < '0' + processAmount)
+                {
+                    index = charCode - '0';
+                    race.ChangePriority(index);
+                }
+                else if (charCode == 'r' || charCode == 'к')
+                {
+                    isSuspended = false;
+                    for (int i = 0; i < processAmount; i++)
+                    {
+                        ResumeThread(race.processArray[i].piApp.hThread);
+                    }
+                }
+            
+
+                
+            }
+
+        
+
+        
+
+        
+        }
+
+
+        WaitForMultipleObjects(processAmount, race.processHandles, true, INFINITE);
+
+        std::sort(race.processArray, race.processArray + processAmount, [](Process& a, Process& b) {return a.exitCode < b.exitCode; });
+
+        race.Info(isSuspended);
+        
+
+
+     }
+     catch (const std::exception& e)
+     {
+         std::cout << "\n\n" << e.what() << std::endl;
+     }
 }
-
-// Запуск программы: CTRL+F5 или меню "Отладка" > "Запуск без отладки"
-// Отладка программы: F5 или меню "Отладка" > "Запустить отладку"
-
-// Советы по началу работы 
-//   1. В окне обозревателя решений можно добавлять файлы и управлять ими.
-//   2. В окне Team Explorer можно подключиться к системе управления версиями.
-//   3. В окне "Выходные данные" можно просматривать выходные данные сборки и другие сообщения.
-//   4. В окне "Список ошибок" можно просматривать ошибки.
-//   5. Последовательно выберите пункты меню "Проект" > "Добавить новый элемент", чтобы создать файлы кода, или "Проект" > "Добавить существующий элемент", чтобы добавить в проект существующие файлы кода.
-//   6. Чтобы снова открыть этот проект позже, выберите пункты меню "Файл" > "Открыть" > "Проект" и выберите SLN-файл.
